@@ -11,6 +11,8 @@ def get_google_document(api_key, document_id):
 
 
 # Function to download each tab of the Google Document as a PDF
+# TODO: this doesn't work, but maybe https://stackoverflow.com/a/79183961
+# and maybe this: https://developers.google.com/docs/api/samples/output-json
 def download_pdf(api_key, document_id, output_dir):
     service = build("drive", "v3", developerKey=api_key)
     request = service.files().export_media(
