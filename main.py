@@ -66,13 +66,10 @@ def get_all_tabs(document_or_tab: dict) -> list[dict]:
     """
     all_tabs = []
 
-    if "tabs" in document_or_tab:
-        for tab in document_or_tab["tabs"]:
-            all_tabs = all_tabs + [tab["tabProperties"]] + get_all_tabs(tab)
-
-    if "childTabs" in document_or_tab:
-        for tab in document_or_tab["childTabs"]:
-            all_tabs = all_tabs + [tab["tabProperties"]] + get_all_tabs(tab)
+    tabs = document_or_tab.get("tabs", document_or_tab.get("childTabs", []))
+    for tab in tabs:
+        all_tabs.append(tab["tabProperties"])
+        all_tabs.extend(get_all_tabs(tab))
 
     return all_tabs
 
@@ -116,42 +113,43 @@ def merge_pdfs(temp_dir: str, output_file: str):
     Merge a list of PDF files from a directory
     into a single file
     """
-    pdf_files = [
+    pdf_files = sorted(
         os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".pdf")
-    ]
-    pdf_files.sort()
-    merger = PdfMerger()
-    for pdf in pdf_files:
-        merger.append(pdf)
-    merger.write(output_file)
-    merger.close()
+    )
+
+    with PdfMerger() as merger:
+        for pdf in pdf_files:
+            merger.append(pdf)
+        merger.write(output_file)
 
 
 @click.command()
 @click.argument("url")
 @click.option("--output", default=None, help="Output name of the destination PDF")
 def main(url: str, output: str):
+    """
+    Main function to download a Google document or its tabs as PDFs and merge them into a single file.
+    """
     # Extract document ID from URL
     document_id = url.split("/d/")[1].split("/")[0]
     credentials = get_google_credentials()
     document = get_google_document(credentials, document_id)
 
-    # Use google document title as filename if none is sprovided
-    if not output:
-        output = document["title"] + ".pdf"
-
+    # Use Google document title as filename if none is provided
+    output = output or f"{document['title']}.pdf"
     all_tabs = get_all_tabs(document)
 
     # Define the temporary output directory
     with TemporaryDirectory(prefix="google-docs-downloader-") as temp_dir:
         # Download PDFs
-        if len(all_tabs) >= 1:
-            for index, tab in enumerate(all_tabs):
-                download_pdfs(
-                    credentials, temp_dir, document["documentId"], tab["tabId"], index
-                )
-        else:
-            download_pdfs(credentials, temp_dir, document["documentId"])
+        for index, tab in enumerate(all_tabs) if all_tabs else [(0, None)]:
+            download_pdfs(
+                credentials,
+                temp_dir,
+                document["documentId"],
+                tab.get("tabId") if tab else None,
+                index,
+            )
 
         # Merge PDFs
         merge_pdfs(temp_dir, output)
