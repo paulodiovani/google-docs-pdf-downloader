@@ -1,8 +1,8 @@
 import os.path
-from sys import prefix
-from tempfile import TemporaryDirectory, gettempdir
+from tempfile import TemporaryDirectory
 
 import click
+import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -10,7 +10,9 @@ from googleapiclient.discovery import build
 from PyPDF2 import PdfMerger
 
 # If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/documents.readonly",
+]
 
 
 def get_google_credentials():
@@ -38,24 +40,59 @@ def get_google_credentials():
 
 # Function to authenticate and get the Google Document
 def get_google_document(credentials, document_id):
-    service = build("drive", "v3", credentials=credentials)
-    return service.files().get(fileId=document_id).execute()
+    service = build("docs", "v1", credentials=credentials)
+    return (
+        service.documents()
+        .get(documentId=document_id, includeTabsContent=True)
+        .execute()
+    )
+
+
+def get_all_tabs(document_or_tab) -> list[dict]:
+    all_tabs = []
+
+    if "tabs" in document_or_tab:
+        for tab in document_or_tab["tabs"]:
+            all_tabs = all_tabs + [tab["tabProperties"]] + get_all_tabs(tab)
+
+    if "childTabs" in document_or_tab:
+        for tab in document_or_tab["childTabs"]:
+            all_tabs = all_tabs + [tab["tabProperties"]] + get_all_tabs(tab)
+
+    return all_tabs
 
 
 # Function to download each tab of the Google Document as a PDF
 # TODO: this doesn't work, but maybe https://stackoverflow.com/a/79183961
 # and maybe this: https://developers.google.com/docs/api/samples/output-json
-def download_pdf(credentials, document_id, output_dir):
-    service = build("drive", "v3", credentials=credentials)
-    request = service.files().export_media(
-        fileId=document_id, mimeType="application/pdf"
-    )
-    with open(f"{output_dir}/{document_id}.pdf", "wb") as f:
-        f.write(request.execute())
+def download_pdf(credentials, temp_dir, document_id, tab_id=None):
+    url = f"https://docs.google.com/document/d/{document_id}/export?format=pdf"
+    filename = f"{temp_dir}/{document_id}"
+
+    if tab_id:
+        url += f"&tab={tab_id}"
+        filename += f"-{tab_id}"
+
+    filename += ".pdf"
+
+    headers = {"Authorization": f"Bearer {credentials.token}"}
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        with open(filename, "wb") as f:
+            f.write(response.content)
+    else:
+        raise Exception(
+            f"Failed to download PDF: {response.status_code} - {response.text}"
+        )
 
 
 # Function to merge all downloaded PDFs into a single PDF
-def merge_pdfs(pdf_files, output_file):
+def merge_pdfs(temp_dir, output_file):
+    pdf_files = [
+        os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".pdf")
+    ]
     merger = PdfMerger()
     for pdf in pdf_files:
         merger.append(pdf)
@@ -69,26 +106,29 @@ def merge_pdfs(pdf_files, output_file):
 def main(url, output):
     # Extract document ID from URL
     document_id = url.split("/d/")[1].split("/")[0]
+    credentials = get_google_credentials()
+    document = get_google_document(credentials, document_id)
+
+    if not output:
+        output = document["title"] + ".pdf"
+
+    all_tabs = get_all_tabs(document)
+    # print(document["tabs"])
+    # print(json.dumps(document["tabs"], indent=4))
 
     # Define the temporary output directory
-    temp_dir = TemporaryDirectory(prefix="google-docs-downloader")
-    credentials = get_google_credentials()
+    with TemporaryDirectory(prefix="google-docs-downloader-", delete=False) as temp_dir:
+        # Download PDFs
+        if len(all_tabs) >= 1:
+            for tab in all_tabs:
+                download_pdf(
+                    credentials, temp_dir, document["documentId"], tab["tabId"]
+                )
+        else:
+            download_pdf(credentials, temp_dir, document["documentId"])
 
-    # Get Google Document name if output is not provided
-    if not output:
-        document = get_google_document(credentials, document_id)
-        print(document)
-        output = document["name"] + ".pdf"
-
-    # # Download PDF
-    # download_pdf(credentials, document_id, temp_dir.name)
-    #
-    # # Merge PDFs (assuming only one PDF for simplicity)
-    # pdf_files = [f"{temp_dir.name}/{document_id}.pdf"]
-    # merge_pdfs(pdf_files, output)
-
-    # cleanup temp dir
-    # temp_dir.cleanup()
+        # Merge PDFs
+        merge_pdfs(temp_dir, output)
 
 
 if __name__ == "__main__":
