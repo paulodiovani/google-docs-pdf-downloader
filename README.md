@@ -11,9 +11,9 @@ Download Google Documents with multiple tabs as a single PDF
 ### Setup Google project and credentials
 
 1. Create a Google Project in [console.cloud.google.com/projectcreate](https://console.cloud.google.com/projectcreate) or use an existing one
-2. Create new OAuth Credentials in [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) and download the client scret JSON.
+2. Create new OAuth Credentials in [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) and download the client secret JSON
 3. Save the secrets JSON to `config/credentials.json`
-4. Enable the Google Docs API in [console.cloud.google.com/apis/library/docs.googleapis.com](https://console.cloud.google.com/apis/library/docs.googleapis.com)
+4. Enable the Google Docs API for your project in [console.cloud.google.com/apis/library/docs.googleapis.com](https://console.cloud.google.com/apis/library/docs.googleapis.com)
 
 ### Setup Python
 
