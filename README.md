@@ -2,6 +2,11 @@
 
 Download Google Documents with multiple tabs as a single PDF
 
+For more about Tabs in Google Documents check these topics:
+
+- [Use document tabs in Google Docs](https://support.google.com/docs/answer/15499791)
+- [Work with tabs](https://developers.google.com/docs/api/how-tos/tabs)
+
 ## Requirements
 
 - Python >= `3.10`
