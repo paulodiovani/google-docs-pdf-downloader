@@ -65,13 +65,13 @@ def get_all_tabs(document_or_tab) -> list[dict]:
 # Function to download each tab of the Google Document as a PDF
 # TODO: this doesn't work, but maybe https://stackoverflow.com/a/79183961
 # and maybe this: https://developers.google.com/docs/api/samples/output-json
-def download_pdf(credentials, temp_dir, document_id, tab_id=None):
+def download_pdfs(credentials, temp_dir, document_id, tab_id=None, index=0):
     url = f"https://docs.google.com/document/d/{document_id}/export?format=pdf"
     filename = f"{temp_dir}/{document_id}"
 
     if tab_id:
         url += f"&tab={tab_id}"
-        filename += f"-{tab_id}"
+        filename += f"-{str(index).rjust(4, '0')}"
 
     filename += ".pdf"
 
@@ -93,6 +93,7 @@ def merge_pdfs(temp_dir, output_file):
     pdf_files = [
         os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if f.endswith(".pdf")
     ]
+    pdf_files.sort()
     merger = PdfMerger()
     for pdf in pdf_files:
         merger.append(pdf)
@@ -113,19 +114,17 @@ def main(url, output):
         output = document["title"] + ".pdf"
 
     all_tabs = get_all_tabs(document)
-    # print(document["tabs"])
-    # print(json.dumps(document["tabs"], indent=4))
 
     # Define the temporary output directory
-    with TemporaryDirectory(prefix="google-docs-downloader-", delete=False) as temp_dir:
+    with TemporaryDirectory(prefix="google-docs-downloader-") as temp_dir:
         # Download PDFs
         if len(all_tabs) >= 1:
-            for tab in all_tabs:
-                download_pdf(
-                    credentials, temp_dir, document["documentId"], tab["tabId"]
+            for index, tab in enumerate(all_tabs):
+                download_pdfs(
+                    credentials, temp_dir, document["documentId"], tab["tabId"], index
                 )
         else:
-            download_pdf(credentials, temp_dir, document["documentId"])
+            download_pdfs(credentials, temp_dir, document["documentId"])
 
         # Merge PDFs
         merge_pdfs(temp_dir, output)
